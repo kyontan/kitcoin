@@ -1,0 +1,22 @@
+version: '3'
+
+services:
+  api:
+    build:
+      context: .
+    image: kitcoin
+    env_file: .env
+    ports:
+      - "3000:3000"
+    depends_on:
+      - redis
+    links:
+      - redis
+    stdin_open: true
+    tty: true
+    volumes:
+      - "$PWD/app.rb:/usr/src/app/app.rb"
+  redis:
+    image: redis:3-alpine
+    volumes:
+      - "$PWD/redis:/data"
