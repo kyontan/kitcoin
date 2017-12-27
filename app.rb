@@ -214,10 +214,16 @@ class App < Sinatra::Base
       halt 422, json({ message: "hash: insufficient difficulty. Current difficulty is #{current_difficulty}, given #{given_difficulty}" })
     end
 
+    redis.set("#{h}:prev", prev)
+    redis.set("#{h}:nonce", nonce)
+    redis.set("#{h}:miner", miner)
+    redis.set("#{h}:msg", msg)
+    redis.set("#{h}:datetime", DateTime.now.iso8601)
+
     if matched = parse_msg_as_transfer(msg)
       sender = matched[:sender]
       receiver = matched[:receiver]
-      q = matched[:q]
+      q = matched[:q].to_f
 
       unless user_exists? sender
         halt 400, json({ message: "sender: user #{sender} must be registered" })
@@ -232,6 +238,10 @@ class App < Sinatra::Base
         halt 422, json({ message: "sender: must have at least #{q} to send" })
       end
 
+      if receiver == miner
+        halt 422, json({ message: "receiver: must not equal to miner" })
+      end
+
       add_balance(user: sender, h: h, diff: -q)
       charge = q * current_transfer_charge
       add_balance(user: receiver, h: h, diff: q - charge)
@@ -239,12 +249,6 @@ class App < Sinatra::Base
     else # only mining
       add_balance(user: miner, h: h, diff: given_difficulty)
     end
-
-    redis.set("#{h}:prev", prev)
-    redis.set("#{h}:nonce", nonce)
-    redis.set("#{h}:miner", miner)
-    redis.set("#{h}:msg", msg)
-    redis.set("#{h}:datetime", DateTime.now.iso8601)
 
     json get_block(h)
   end
@@ -270,6 +274,7 @@ class App < Sinatra::Base
       halt 404, json({ message: "hash: block with hash #{h} doesn't exist" })
     end
 
-    json get_block(h)
+    balance = get_all_users.map {|u| [u, get_balance(user: u, h: h)] }.to_h
+    json get_block(h).merge(balance: balance)
   end
 end
